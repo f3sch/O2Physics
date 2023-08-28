@@ -151,7 +151,7 @@ struct CheckMCV0 {
     registry.fill(HIST(name "/YY"), pos.y(), ele.y());                    \
     registry.fill(HIST(name "/XY"), pos.x(), pos.y() - ele.y());          \
     registry.fill(HIST(name "/XZ"), pos.x(), pos.z() - ele.z());          \
-    if (isAntiCorTgl(pos, ele)) {                                        \
+    if (isAntiCorTgl(pos, ele)) {                                         \
       registry.fill(HIST(name "/anti/TglTgl"), pos.tgl(), ele.tgl());     \
       registry.fill(HIST(name "/anti/PtPt"), pos.pt(), ele.pt());         \
       registry.fill(HIST(name "/anti/ZPosTglPos"), pos.z(), pos.tgl());   \
