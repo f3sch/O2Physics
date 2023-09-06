@@ -18,7 +18,6 @@
 namespace o2::pwgem::photonmeson
 {
 
-
 /**
  * @brief Track has ITS and TPC
  *
