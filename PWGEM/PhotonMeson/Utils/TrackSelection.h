@@ -142,4 +142,4 @@ bool isTPConly_ITSonly(TTrack const& track0, TTrack const& track1)
 }
 } // namespace o2::pwgem::photonmeson
 
-#endif  // PWGEM_PHOTONMESON_UTILS_TRACKSELECTION_H_
+#endif // PWGEM_PHOTONMESON_UTILS_TRACKSELECTION_H_
