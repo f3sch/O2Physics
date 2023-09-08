@@ -34,12 +34,13 @@
 #include "PWGEM/PhotonMeson/DataModel/gammaTables.h"
 #include "PWGLF/DataModel/LFStrangenessTables.h"
 #include "PWGEM/PhotonMeson/Utils/PCMUtilities.h"
+#include "PWGEM/PhotonMeson/Utils/TrackSelection.h"
 
 using namespace o2;
+using namespace o2::soa;
 using namespace o2::framework;
 using namespace o2::framework::expressions;
-using namespace o2::soa;
-using std::array;
+using namespace o2::pwgem::photonmeson;
 
 using FullTracksExtIU = soa::Join<aod::TracksIU, aod::TracksExtra, aod::TracksCovIU, aod::TracksDCA>;
 // using FullTracksExt = soa::Join<aod::Tracks, aod::TracksCov, aod::TracksExtra, aod::TracksDCA>;
@@ -130,10 +131,12 @@ struct createPCM {
 
     // Material correction in the DCA fitter
     o2::base::Propagator::MatCorrType matCorr = o2::base::Propagator::MatCorrType::USEMatCorrNONE;
-    if (useMatCorrType == 1)
+    if (useMatCorrType == 1) {
       matCorr = o2::base::Propagator::MatCorrType::USEMatCorrTGeo;
-    if (useMatCorrType == 2)
+    }
+    if (useMatCorrType == 2) {
       matCorr = o2::base::Propagator::MatCorrType::USEMatCorrLUT;
+    }
     fitter.setMatCorrType(matCorr);
   }
 
@@ -157,16 +160,16 @@ struct createPCM {
     }
 
     auto run3grp_timestamp = bc.timestamp();
-    o2::parameters::GRPObject* grpo = ccdb->getForTimeStamp<o2::parameters::GRPObject>(grpPath, run3grp_timestamp);
-    o2::parameters::GRPMagField* grpmag = 0x0;
-    if (grpo) {
+    auto* grpo = ccdb->getForTimeStamp<o2::parameters::GRPObject>(grpPath, run3grp_timestamp);
+    o2::parameters::GRPMagField* grpmag = nullptr;
+    if (grpo != nullptr) {
       o2::base::Propagator::initFieldFromGRP(grpo);
       // Fetch magnetic field from ccdb for current collision
       d_bz = grpo->getNominalL3Field();
       LOG(info) << "Retrieved GRP for timestamp " << run3grp_timestamp << " with magnetic field of " << d_bz << " kZG";
     } else {
       grpmag = ccdb->getForTimeStamp<o2::parameters::GRPMagField>(grpmagPath, run3grp_timestamp);
-      if (!grpmag) {
+      if (grpmag == nullptr) {
         LOG(fatal) << "Got nullptr from CCDB for path " << grpmagPath << " of object GRPMagField and " << grpPath << " of object GRPObject for timestamp " << run3grp_timestamp;
       }
       o2::base::Propagator::initFieldFromGRP(grpmag);
@@ -185,14 +188,14 @@ struct createPCM {
     }
   }
 
-  float v0_alpha(float pxpos, float pypos, float pzpos, float pxneg, float pyneg, float pzneg)
+  static float v0_alpha(float pxpos, float pypos, float pzpos, float pxneg, float pyneg, float pzneg)
   {
     float momTot = RecoDecay::p(pxpos + pxneg, pypos + pyneg, pzpos + pzneg);
     float lQlNeg = RecoDecay::dotProd(array{pxneg, pyneg, pzneg}, array{pxpos + pxneg, pypos + pyneg, pzpos + pzneg}) / momTot;
     float lQlPos = RecoDecay::dotProd(array{pxpos, pypos, pzpos}, array{pxpos + pxneg, pypos + pyneg, pzpos + pzneg}) / momTot;
     return (lQlPos - lQlNeg) / (lQlPos + lQlNeg);
   }
-  float v0_qt(float pxpos, float pypos, float pzpos, float pxneg, float pyneg, float pzneg)
+  static float v0_qt(float pxpos, float pypos, float pzpos, float pxneg, float pyneg, float pzneg)
   {
     float momTot = RecoDecay::p2(pxpos + pxneg, pypos + pyneg, pzpos + pzneg);
     float dp = RecoDecay::dotProd(array{pxneg, pyneg, pzneg}, array{pxpos + pxneg, pypos + pyneg, pzpos + pzneg});
@@ -202,10 +205,10 @@ struct createPCM {
   template <typename TTrack>
   bool reconstructV0(TTrack const& ele, TTrack const& pos)
   {
-    bool isITSonly_pos = pos.hasITS() & !pos.hasTPC();
-    bool isITSonly_ele = ele.hasITS() & !ele.hasTPC();
-    bool isTPConly_pos = !pos.hasITS() & pos.hasTPC();
-    bool isTPConly_ele = !ele.hasITS() & ele.hasTPC();
+    bool isITSonly_pos = isITSonlyTrack(pos);
+    bool isITSonly_ele = isITSonlyTrack(ele);
+    bool isTPConly_pos = isTPConlyTrack(pos);
+    bool isTPConly_ele = isTPConlyTrack(ele);
 
     if ((isITSonly_pos && isTPConly_ele) || (isITSonly_ele && isTPConly_pos)) {
       return false;
@@ -335,7 +338,7 @@ struct createPCM {
       return false;
     }
 
-    if (track.hasITS() & !track.hasTPC() & (track.hasTRD() | track.hasTOF())) { // remove unrealistic track. this should not happen.
+    if (track.hasITS() && !track.hasTPC() && (track.hasTRD() || track.hasTOF())) { // remove unrealistic track. this should not happen.
       return false;
     }
 
@@ -352,7 +355,7 @@ struct createPCM {
       if (track.itsChi2NCl() > maxchi2its) {
         return false;
       }
-      bool isITSonly = track.hasITS() & !track.hasTPC() & !track.hasTRD() & !track.hasTOF();
+      bool isITSonly = isITSonlyTrack(track);
       if (isITSonly) {
         if (track.pt() > maxpt_itsonly) {
           return false;
