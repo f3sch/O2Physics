@@ -39,7 +39,7 @@ DECLARE_SOA_COLUMN(RecoPosX, recoPosX, float);          //! Reconstructed X of p
 DECLARE_SOA_COLUMN(RecoPosY, recoPosY, float);          //! Reconstructed X of pos track
 DECLARE_SOA_COLUMN(RecoPosZ, recoPosZ, float);          //! Reconstructed X of pos track
 DECLARE_SOA_COLUMN(RecoPosT, recoPosT, float);          //! Estimated time of the pos track in ns wrt collision()
-DECLARE_SOA_COLUMN(RecoPosSign, recoPosSign, int16_t);    //! Sign of pos track
+DECLARE_SOA_COLUMN(RecoPosSign, recoPosSign, int16_t);  //! Sign of pos track
 DECLARE_SOA_COLUMN(RecoPosHasITS, recoPosHasITS, bool); //! if pos track has ITS
 DECLARE_SOA_COLUMN(RecoPosHasTPC, recoPosHasTPC, bool); //! if pos track has TPC
 DECLARE_SOA_COLUMN(RecoPosHasTRD, recoPosHasTRD, bool); //! if pos track has TRD
@@ -52,7 +52,7 @@ DECLARE_SOA_COLUMN(RecoEleX, recoEleX, float);          //! Reconstructed X of e
 DECLARE_SOA_COLUMN(RecoEleY, recoEleY, float);          //! Reconstructed X of ele track
 DECLARE_SOA_COLUMN(RecoEleZ, recoEleZ, float);          //! Reconstructed X of ele track
 DECLARE_SOA_COLUMN(RecoEleT, recoEleT, float);          //! Estimated time of the ele track in ns wrt collision()
-DECLARE_SOA_COLUMN(RecoEleSign, recoEleSign, int16_t);    //! Sign of ele track
+DECLARE_SOA_COLUMN(RecoEleSign, recoEleSign, int16_t);  //! Sign of ele track
 DECLARE_SOA_COLUMN(RecoEleHasITS, recoEleHasITS, bool); //! If ele track has ITS
 DECLARE_SOA_COLUMN(RecoEleHasTPC, recoEleHasTPC, bool); //! If ele track has TPC
 DECLARE_SOA_COLUMN(RecoEleHasTRD, recoEleHasTRD, bool); //! If ele track has TRD
