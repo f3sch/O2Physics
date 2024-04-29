@@ -62,7 +62,7 @@ struct OnTheFlyTracker {
   Produces<aod::TracksAlice3> TracksAlice3;
 
   // optionally produced, empty (to be tuned later)
-  Produces<aod::StoredTracksExtra> tracksExtra; // base table, extend later
+  Produces<aod::StoredTracksExtra_001> tracksExtra; // base table, extend later
   Produces<aod::TrackSelection> trackSelection;
   Produces<aod::TrackSelectionExtension> trackSelectionExtension;
 
