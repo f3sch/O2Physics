@@ -39,6 +39,8 @@
 #include "DataFormatsParameters/GRPObject.h"
 #include "DataFormatsParameters/GRPMagField.h"
 #include "CCDB/BasicCCDBManager.h"
+#include "DataFormatsTPC/VDriftCorrFact.h"
+#include "Common/CCDB/tpcVDriftManager.h"
 
 #include "Tools/KFparticle/KFUtilities.h"
 
@@ -71,6 +73,7 @@ struct PhotonConversionBuilder {
   Configurable<std::string> lutPath{"lutPath", "GLO/Param/MatLUT", "Path of the Lut parametrization"};
   Configurable<std::string> geoPath{"geoPath", "GLO/Config/GeometryAligned", "Path of the geometry file"};
   Configurable<bool> skipGRPOquery{"skipGRPOquery", true, "skip grpo query"};
+  Configurable<std::string> vdriftPath{"vdriftPath", "TPC/Calib/VDriftTgl", "VDrift calibration path"};
 
   // Operation and minimisation criteria
   Configurable<double> d_bz_input{"d_bz", -999, "bz field, -999 is automatic"};
@@ -120,6 +123,7 @@ struct PhotonConversionBuilder {
   Service<o2::ccdb::BasicCCDBManager> ccdb;
   o2::base::MatLayerCylSet* lut = nullptr;
   o2::base::Propagator::MatCorrType matCorr = o2::base::Propagator::MatCorrType::USEMatCorrNONE;
+  o2::aod::common::TPCVDriftManager mVDriftMgr;
 
   HistogramRegistry registry{
     "registry",
@@ -152,7 +156,7 @@ struct PhotonConversionBuilder {
       {"V0Leg/hTPCNsigmaEl", "TPC dE/dx vs. p_{in};p_{in} (GeV/c);n #sigma_{e}^{TPC}", {HistType::kTH2F, {{1000, 0.f, 10.f}, {100, -5.f, +5.f}}}},
     }};
 
-  void init(InitContext&)
+  void init(InitContext& /*unused*/)
   {
     mRunNumber = 0;
     d_bz = 0;
@@ -200,18 +204,19 @@ struct PhotonConversionBuilder {
     }
 
     auto run3grp_timestamp = bc.timestamp();
-    o2::parameters::GRPObject* grpo = 0x0;
-    o2::parameters::GRPMagField* grpmag = 0x0;
-    if (!skipGRPOquery)
+    o2::parameters::GRPObject* grpo = nullptr;
+    o2::parameters::GRPMagField* grpmag = nullptr;
+    if (!skipGRPOquery) {
       grpo = ccdb->getForTimeStamp<o2::parameters::GRPObject>(grpPath, run3grp_timestamp);
-    if (grpo) {
+    }
+    if (grpo != nullptr) {
       o2::base::Propagator::initFieldFromGRP(grpo);
       // Fetch magnetic field from ccdb for current collision
       d_bz = grpo->getNominalL3Field();
       LOG(info) << "Retrieved GRP for timestamp " << run3grp_timestamp << " with magnetic field of " << d_bz << " kZG";
     } else {
       grpmag = ccdb->getForTimeStamp<o2::parameters::GRPMagField>(grpmagPath, run3grp_timestamp);
-      if (!grpmag) {
+      if (grpmag == nullptr) {
         LOG(fatal) << "Got nullptr from CCDB for path " << grpmagPath << " of object GRPMagField and " << grpPath << " of object GRPObject for timestamp " << run3grp_timestamp;
       }
       o2::base::Propagator::initFieldFromGRP(grpmag);
@@ -226,8 +231,15 @@ struct PhotonConversionBuilder {
       o2::base::Propagator::Instance()->setMatLUT(lut);
     }
     /// Set magnetic field for KF vertexing
-    float magneticField = o2::base::Propagator::Instance()->getNominalBz();
+    const float magneticField = o2::base::Propagator::Instance()->getNominalBz();
     KFParticle::SetField(magneticField);
+  }
+
+  void updateCCDB(aod::BCsWithTimestamps::iterator const& bc)
+  {
+    auto timestamp = bc.timestamp();
+
+    mVDriftMgr.update(timestamp);
   }
 
   std::pair<int8_t, std::set<uint8_t>> its_ib_Requirement = {0, {0, 1, 2}}; // no hit on 3 ITS ib layers.
@@ -373,11 +385,19 @@ struct PhotonConversionBuilder {
     gpu::gpustd::array<float, 2> dcaInfo;
 
     auto pTrack = getTrackPar(pos);
+    if (isTPConlyTrack(pos) && !mVDriftMgr.correctTPCTrack(collision, pos, pTrack)) {
+      LOGP(info, "failed correction for positive tpc track");
+      return;
+    }
     o2::base::Propagator::Instance()->propagateToDCABxByBz({collision.posX(), collision.posY(), collision.posZ()}, pTrack, 2.f, matCorr, &dcaInfo);
     auto posdcaXY = dcaInfo[0];
     auto posdcaZ = dcaInfo[1];
 
     auto nTrack = getTrackPar(ele);
+    if (isTPConlyTrack(ele) && !mVDriftMgr.correctTPCTrack(collision, ele, nTrack)) {
+      LOGP(info, "failed correction for negative tpc track");
+      return;
+    }
     o2::base::Propagator::Instance()->propagateToDCABxByBz({collision.posX(), collision.posY(), collision.posZ()}, nTrack, 2.f, matCorr, &dcaInfo);
     auto eledcaXY = dcaInfo[0];
     auto eledcaZ = dcaInfo[1];
@@ -632,6 +652,7 @@ struct PhotonConversionBuilder {
 
       auto bc = collision.template bc_as<aod::BCsWithTimestamps>();
       initCCDB(bc);
+      updateCCDB(bc);
       registry.fill(HIST("hCollisionCounter"), 1);
 
       auto v0s_per_coll = v0s.sliceBy(perCollision, collision.globalIndex());

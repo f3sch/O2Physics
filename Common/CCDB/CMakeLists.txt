@@ -13,10 +13,14 @@ o2physics_add_library(AnalysisCCDB
                SOURCES EventSelectionParams.cxx
                SOURCES TriggerAliases.cxx
                SOURCES ctpRateFetcher.cxx
-               PUBLIC_LINK_LIBRARIES O2::Framework O2Physics::AnalysisCore)
+               PUBLIC_LINK_LIBRARIES O2::Framework
+                                     O2Physics::AnalysisCore
+                                     O2::DataFormatsTPC
+                                   )
 
 o2physics_target_root_dictionary(AnalysisCCDB
               HEADERS EventSelectionParams.h
               HEADERS TriggerAliases.h
               HEADERS ctpRateFetcher.h
+              HEADERS tpcVDriftManager.h
               LINKDEF AnalysisCCDBLinkDef.h)
