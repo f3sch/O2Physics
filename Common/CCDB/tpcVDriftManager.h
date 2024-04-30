@@ -38,6 +38,10 @@ class TPCVDriftManager
 
     // Update Obj
     mVD = mCCDB->getForTimeStamp<o2::tpc::VDriftCorrFact>(mVDriftTglPath, timestamp);
+    if (mVD == nullptr) {
+      LOGP(error, "Got nullptr from ccdb for VDriftCorrFact for {}", timestamp);
+      return;
+    }
 
     // Update factors
     mTPCVDrift = mVD->refVDrift * mVD->corrFact;
@@ -67,25 +71,30 @@ class TPCVDriftManager
   template <typename Collision, typename TrackExtra, typename Track>
   [[nodiscard]] auto correctTPCTrack(const Collision& col, const TrackExtra& trackExtra, Track& track) const -> bool
   {
-      float tTB, tTBErr;
-      if(col.collisionTimeRes() < 0){
-          tTB = trackExtra.tpcTime0();
-          tTBErr = trackExtra.trackTimeRes();
-      } else{
-          tTB = col.collisionTime() * mMUS2TPCBin;
-          tTBErr = col.collisionTimeRes() * mMUS2TPCBin;
-      }
-
-      float dDrift = (tTB - trackExtra.tpcTime0()) * mTPCBin2Z;
-      float dDriftErr = tTBErr * mTPCBin2Z;
-      if(dDriftErr < 0.f){
-          return false;
-      }
-      // TODO how to check for constrained tracks?
-      track.setZ(track.getZ() + ((track.getZ() < 0.) ? -dDrift : dDrift));
-      /* track.setCov(track.getSigmaZ2() + dDriftErr*dDriftErr, o2::track::kSigZ2); */
-
+    // Check if there is a good object available otherwise pretend everything is fine
+    if (mVD == nullptr) {
+      LOGP(warn, "No VDrift object available, pretending to be correct");
       return true;
+    }
+    float tTB, tTBErr;
+    if (col.collisionTimeRes() < 0) {
+      tTB = trackExtra.tpcTime0();
+      tTBErr = trackExtra.trackTimeRes();
+    } else {
+      tTB = col.collisionTime() * mMUS2TPCBin;
+      tTBErr = col.collisionTimeRes() * mMUS2TPCBin;
+    }
+
+    float dDrift = (tTB - trackExtra.tpcTime0()) * mTPCBin2Z;
+    float dDriftErr = tTBErr * mTPCBin2Z;
+    if (dDriftErr < 0.f) {
+      return false;
+    }
+    // TODO how to check for constrained tracks?
+    track.setZ(track.getZ() + ((track.getZ() < 0.) ? -dDrift : dDrift));
+    /* track.setCov(track.getSigmaZ2() + dDriftErr*dDriftErr, o2::track::kSigZ2); */
+
+    return true;
   }
 
  private:
