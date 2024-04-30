@@ -67,7 +67,6 @@ class TPCVDriftManager
   template <typename Collision, typename TrackExtra, typename Track>
   [[nodiscard]] auto correctTPCTrack(const Collision& col, const TrackExtra& trackExtra, Track& track) const -> bool
   {
-      // TODO Does this Track need a correction?
       float tTB, tTBErr;
       if(col.collisionTimeRes() < 0){
           tTB = trackExtra.tpcTime0();
