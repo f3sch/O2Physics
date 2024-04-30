@@ -234,7 +234,7 @@ struct PhotonConversionBuilder {
     const float magneticField = o2::base::Propagator::Instance()->getNominalBz();
     KFParticle::SetField(magneticField);
 
-    mVDriftMgr.init(&ccdb->instance());
+    mVDriftMgr.init(&ccdb->instance(), mRunNumber, run3grp_timestamp);
   }
 
   void updateCCDB(aod::BCsWithTimestamps::iterator const& bc)
@@ -362,6 +362,7 @@ struct PhotonConversionBuilder {
     auto pos = v0.template posTrack_as<TTrack>();
     auto ele = v0.template negTrack_as<TTrack>();
     auto collision = v0.template collision_as<TCollision>(); // collision where this v0 belongs to.
+    auto bc = collision.template bc_as<aod::BCsWithTimestamps>();
 
     if (pos.sign() * ele.sign() > 0) { // reject same sign pair
       return;
@@ -386,21 +387,23 @@ struct PhotonConversionBuilder {
     // Calculate DCA with respect to the collision associated to the v0, not individual tracks
     gpu::gpustd::array<float, 2> dcaInfo;
 
-    auto pTrack = getTrackPar(pos);
-    if (isTPConlyTrack(pos) && !mVDriftMgr.correctTPCTrack(collision, pos, pTrack)) {
+    auto pTrack = getTrackParCov(pos);
+    if (isTPConlyTrack(pos) && !mVDriftMgr.correctTPCTrack(bc, collision, pos, pTrack)) {
       LOGP(info, "failed correction for positive tpc track");
       return;
     }
-    o2::base::Propagator::Instance()->propagateToDCABxByBz({collision.posX(), collision.posY(), collision.posZ()}, pTrack, 2.f, matCorr, &dcaInfo);
+    auto pTrackC = pTrack;
+    o2::base::Propagator::Instance()->propagateToDCABxByBz({collision.posX(), collision.posY(), collision.posZ()}, pTrackC, 2.f, matCorr, &dcaInfo);
     auto posdcaXY = dcaInfo[0];
     auto posdcaZ = dcaInfo[1];
 
-    auto nTrack = getTrackPar(ele);
-    if (isTPConlyTrack(ele) && !mVDriftMgr.correctTPCTrack(collision, ele, nTrack)) {
+    auto nTrack = getTrackParCov(ele);
+    if (isTPConlyTrack(ele) && !mVDriftMgr.correctTPCTrack(bc, collision, ele, nTrack)) {
       LOGP(info, "failed correction for negative tpc track");
       return;
     }
-    o2::base::Propagator::Instance()->propagateToDCABxByBz({collision.posX(), collision.posY(), collision.posZ()}, nTrack, 2.f, matCorr, &dcaInfo);
+    auto nTrackC = nTrack;
+    o2::base::Propagator::Instance()->propagateToDCABxByBz({collision.posX(), collision.posY(), collision.posZ()}, nTrackC, 2.f, matCorr, &dcaInfo);
     auto eledcaXY = dcaInfo[0];
     auto eledcaZ = dcaInfo[1];
 
@@ -409,7 +412,7 @@ struct PhotonConversionBuilder {
     }
 
     float xyz[3] = {0.f, 0.f, 0.f};
-    Vtx_recalculation(o2::base::Propagator::Instance(), pos, ele, xyz, matCorr);
+    Vtx_recalculationParCov(o2::base::Propagator::Instance(), pTrack, nTrack, xyz, matCorr);
     float rxy_tmp = RecoDecay::sqrtSumOfSquares(xyz[0], xyz[1]);
     if (rxy_tmp > maxX + margin_r_tpc) {
       return;
@@ -418,8 +421,8 @@ struct PhotonConversionBuilder {
       return; // RZ line cut
     }
 
-    KFPTrack kfp_track_pos = createKFPTrackFromTrack(pos);
-    KFPTrack kfp_track_ele = createKFPTrackFromTrack(ele);
+    KFPTrack kfp_track_pos = createKFPTrackFromTrackParCov(pTrack, pos.sign(), pos.tpcNClsFound(), pos.tpcChi2NCl());
+    KFPTrack kfp_track_ele = createKFPTrackFromTrackParCov(nTrack, ele.sign(), ele.tpcNClsFound(), ele.tpcChi2NCl());
     KFParticle kfp_pos(kfp_track_pos, -11);
     KFParticle kfp_ele(kfp_track_ele, 11);
     const KFParticle* GammaDaughters[2] = {&kfp_pos, &kfp_ele};

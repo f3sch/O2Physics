@@ -19,6 +19,8 @@
 #include "Framework/Logger.h"
 #include "DataFormatsTPC/VDriftCorrFact.h"
 #include "CommonConstants/LHCConstants.h"
+#include "DataFormatsParameters/GRPLHCIFData.h"
+#include "DataFormatsParameters/GRPECSObject.h"
 #include "ReconstructionDataFormats/TrackParametrization.h"
 
 namespace o2::aod::common
@@ -29,9 +31,29 @@ namespace o2::aod::common
 class TPCVDriftManager
 {
  public:
-  void init(o2::ccdb::BasicCCDBManager* ccdb)
+  void init(o2::ccdb::BasicCCDBManager* ccdb, int run, long timestamp)
   {
     mCCDB = ccdb;
+
+    /// Copied from eventselection
+    // access orbit-reset timestamp
+    const auto ctpx = mCCDB->getForTimeStamp<std::vector<Long64_t>>("CTP/Calib/OrbitReset", timestamp);
+    int64_t tsOrbitReset = ctpx->at(0); // us
+    // access TF duration, start-of-run and end-of-run timestamps from ECS GRP
+    std::map<std::string, std::string> metadata;
+    metadata["runNumber"] = Form("%d", run);
+    const auto grpecs = mCCDB->getSpecific<o2::parameters::GRPECSObject>("GLO/Config/GRPECS", timestamp, metadata);
+    uint32_t nOrbitsPerTF = grpecs->getNHBFPerTF(); // assuming 1 orbit = 1 HBF;  nOrbitsPerTF=128 in 2022, 32 in 2023
+    int64_t tsSOR = grpecs->getTimeStart();         // ms
+    // calculate SOR orbit
+    int64_t orbitSOR = (tsSOR * 1000 - tsOrbitReset) / o2::constants::lhc::LHCOrbitMUS;
+    // adjust to the nearest TF edge
+    orbitSOR = orbitSOR / nOrbitsPerTF * nOrbitsPerTF;
+    // first bc of the first orbit (should coincide with TF start)
+    mBCSOR = orbitSOR * o2::constants::lhc::LHCMaxBunches;
+    // duration of TF in bcs
+    mNBCsPerTF = nOrbitsPerTF * o2::constants::lhc::LHCMaxBunches;
+    LOGP(info, "tsOrbitReset={} us, SOR = {} ms, orbitSOR = {}, nBCsPerTF = {}", tsOrbitReset, tsSOR, orbitSOR, mNBCsPerTF);
   }
 
   void update(long timestamp)
@@ -42,7 +64,7 @@ class TPCVDriftManager
     }
 
     // Update Obj
-    mVD = mCCDB->getForTimeStamp<o2::tpc::VDriftCorrFact>(mVDriftTglPath, timestamp);
+    mVD = mCCDB->getForTimeStamp<o2::tpc::VDriftCorrFact>("TPC/Calib/VDriftTgl", timestamp);
     if (mVD == nullptr) {
       LOGP(error, "Got nullptr from ccdb for VDriftCorrFact for {}", timestamp);
       return;
@@ -56,59 +78,43 @@ class TPCVDriftManager
     LOGP(info, "Updated VDrift for {} with vdrift={} and bin2z={}", mVD->creationTime, mTPCVDrift, mTPCBin2Z);
   }
 
-  [[nodiscard]] auto getVDrift() const -> float
-  {
-    return mTPCVDrift;
-  }
-
-  [[nodiscard]] auto getVDriftErr() const -> float
-  {
-    return mTPCVDriftCorrFact;
-  };
-
-  [[nodiscard]] auto getTPCBin2Z() const -> float
-  {
-    return mTPCBin2Z;
-  };
-
-  static constexpr float mMUS2TPCBin{1.f / (8 * o2::constants::lhc::LHCBunchSpacingMUS)};
-
-  template <typename Collision, typename TrackExtra, typename Track>
-  [[nodiscard]] auto correctTPCTrack(const Collision& col, const TrackExtra& trackExtra, Track& track) const -> bool
+  template <typename BC, typename Collision, typename TrackExtra, typename Track>
+  [[nodiscard]] auto correctTPCTrack(BC bc, const Collision& col, const TrackExtra& trackExtra, Track& track) -> bool
   {
     // Check if there is a good object available otherwise pretend everything is fine
     if (mVD == nullptr) {
-      LOGP(warn, "No VDrift object available, pretending to be correct");
+      LOGP(debug, "No VDrift object available, pretending track to be correct");
       return true;
     }
-    float tTB, tTBErr;
-    if (col.collisionTimeRes() < 0) {
-      tTB = trackExtra.tpcTime0();
-      tTBErr = trackExtra.trackTimeRes();
-    } else {
-      tTB = col.collisionTime() * mMUS2TPCBin;
-      tTBErr = col.collisionTimeRes() * mMUS2TPCBin;
-    }
+
+    // TPC time is given relative to the TF start
+    int64_t bcInTF = (bc.globalBC() - mBCSOR) % mNBCsPerTF;                                       // BC in TF
+    float timeCol = bcInTF * o2::constants::lhc::LHCBunchSpacingMUS + col.collisionTime() * 1e-3; // Collision time is given relative to the bc [ns]
+    float tTB = timeCol * mMUS2TPCBin;
+    float tTBErr = col.collisionTimeRes() * mMUS2TPCBin;
 
     float dDrift = (tTB - trackExtra.tpcTime0()) * mTPCBin2Z;
     float dDriftErr = tTBErr * mTPCBin2Z;
-    if (dDriftErr < 0.f) {
+    if (dDriftErr < 0.f || dDrift > 150.f) { // Generous cut on Z correction
+      LOGP(warn, "Skipping faulty correction with dDrift={} +- {}", dDrift, dDriftErr);
       return false;
     }
     // TODO how to check for constrained tracks?
     track.setZ(track.getZ() + ((track.getZ() < 0.) ? -dDrift : dDrift));
-    /* track.setCov(track.getSigmaZ2() + dDriftErr*dDriftErr, o2::track::kSigZ2); */
+    track.setCov(track.getSigmaZ2() + dDriftErr*dDriftErr, o2::track::kSigZ2);
 
     return true;
   }
 
  private:
+  static constexpr float mMUS2TPCBin{1.f / (8 * o2::constants::lhc::LHCBunchSpacingMUS)};
   float mTPCBin2Z{};
   float mTPCVDrift{};
   float mTPCVDriftCorrFact{};
+  int64_t mBCSOR = -1;     // global bc of the start of the first orbit
+  int64_t mNBCsPerTF = -1; // duration of TF in bcs, should be 128*3564 or 32*3564
 
   const o2::tpc::VDriftCorrFact* mVD{nullptr};
-  std::string mVDriftTglPath{"TPC/Calib/VDriftTgl"};
   o2::ccdb::BasicCCDBManager* mCCDB;
 };
 
