@@ -233,6 +233,8 @@ struct PhotonConversionBuilder {
     /// Set magnetic field for KF vertexing
     const float magneticField = o2::base::Propagator::Instance()->getNominalBz();
     KFParticle::SetField(magneticField);
+
+    mVDriftMgr.init(&ccdb->instance());
   }
 
   void updateCCDB(aod::BCsWithTimestamps::iterator const& bc)

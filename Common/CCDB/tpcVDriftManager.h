@@ -29,6 +29,11 @@ namespace o2::aod::common
 class TPCVDriftManager
 {
  public:
+  void init(o2::ccdb::BasicCCDBManager* ccdb)
+  {
+    mCCDB = ccdb;
+  }
+
   void update(long timestamp)
   {
     // Check validity of already present obj, otherwise update
@@ -104,7 +109,7 @@ class TPCVDriftManager
 
   const o2::tpc::VDriftCorrFact* mVD{nullptr};
   std::string mVDriftTglPath{"TPC/Calib/VDriftTgl"};
-  o2::framework::Service<o2::ccdb::BasicCCDBManager> mCCDB;
+  o2::ccdb::BasicCCDBManager* mCCDB;
 };
 
 } // namespace o2::aod::common
