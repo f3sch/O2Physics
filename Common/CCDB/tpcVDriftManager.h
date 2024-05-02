@@ -95,12 +95,12 @@ class TPCVDriftManager
 
     float dDrift = (tTB - trackExtra.tpcTime0()) * mTPCBin2Z;
     float dDriftErr = tTBErr * mTPCBin2Z;
-    if (dDriftErr < 0.f || dDrift > 150.f) { // Generous cut on Z correction
+    if (dDriftErr < 0.f || dDrift > 250.f) { // Generous cut on Z correction
       LOGP(warn, "Skipping faulty correction with dDrift={} +- {}", dDrift, dDriftErr);
       return false;
     }
     // TODO how to check for constrained tracks?
-    track.setZ(track.getZ() + ((track.getZ() < 0.) ? -dDrift : dDrift));
+    track.setZ(track.getZ() + ((track.getTgl() < 0.) ? -dDrift : dDrift));
     track.setCov(track.getSigmaZ2() + dDriftErr*dDriftErr, o2::track::kSigZ2);
 
     return true;
