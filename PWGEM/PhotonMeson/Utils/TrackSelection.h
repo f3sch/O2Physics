@@ -232,6 +232,25 @@ inline bool checkMCParticles(T const& mc1, T const& mc2)
   }
   return true;
 }
+
+template <typename TTrack>
+inline int getV0LegBin(TTrack const& track0, TTrack const& track1)
+{
+  if (isITSTPC_ITSTPC(track0, track1)) {
+    return 0;
+  } else if (isTPConly_TPConly(track0, track1)) {
+    return 1;
+  } else if (isITSonly_ITSonly(track0, track1)) {
+    return 2;
+  } else if (isITSTPC_TPConly(track0, track1)) {
+    return 3;
+  } else if (isITSTPC_ITSonly(track0, track1)) {
+    return 4;
+  } else if (isTPConly_ITSonly(track0, track1)) {
+    return 5;
+  }
+  return 6;
+}
 } // namespace o2::pwgem::photonmeson
 
 #endif // PWGEM_PHOTONMESON_UTILS_TRACKSELECTION_H_

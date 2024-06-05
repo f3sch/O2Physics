@@ -39,6 +39,8 @@
 #include "DataFormatsParameters/GRPObject.h"
 #include "DataFormatsParameters/GRPMagField.h"
 #include "CCDB/BasicCCDBManager.h"
+#include "DataFormatsTPC/VDriftCorrFact.h"
+#include "Common/CCDB/tpcVDriftManager.h"
 
 #include "Tools/KFparticle/KFUtilities.h"
 
@@ -71,6 +73,9 @@ struct PhotonConversionBuilder {
   Configurable<std::string> lutPath{"lutPath", "GLO/Param/MatLUT", "Path of the Lut parametrization"};
   Configurable<std::string> geoPath{"geoPath", "GLO/Config/GeometryAligned", "Path of the geometry file"};
   Configurable<bool> skipGRPOquery{"skipGRPOquery", true, "skip grpo query"};
+
+  // Track Options
+  Configurable<bool> moveTPCTracks{"moveTPCTracks", true, "Move TPC-only tracks under the collision assumption"};
 
   // Operation and minimisation criteria
   Configurable<double> d_bz_input{"d_bz", -999, "bz field, -999 is automatic"};
@@ -121,6 +126,7 @@ struct PhotonConversionBuilder {
   Service<o2::ccdb::BasicCCDBManager> ccdb;
   o2::base::MatLayerCylSet* lut = nullptr;
   o2::base::Propagator::MatCorrType matCorr = o2::base::Propagator::MatCorrType::USEMatCorrNONE;
+  o2::aod::common::TPCVDriftManager mVDriftMgr;
 
   HistogramRegistry registry{
     "registry",
@@ -146,6 +152,8 @@ struct PhotonConversionBuilder {
       {"V0/hRxy_minX_ITSTPC_TPC", "min trackiu X vs. R_{xy};trackiu X (cm);min trackiu X - R_{xy} (cm)", {HistType::kTH2F, {{100, 0.0f, 100.f}, {100, -50.0, 50.0f}}}},
       {"V0/hRxy_minX_TPC_TPC", "min trackiu X vs. R_{xy};trackiu X (cm);min trackiu X - R_{xy} (cm)", {HistType::kTH2F, {{100, 0.0f, 100.f}, {100, -50.0, 50.0f}}}},
       {"V0/hPCA_diffX", "PCA vs. trackiu X - R_{xy};distance btween 2 legs (cm);min trackiu X - R_{xy} (cm)", {HistType::kTH2F, {{500, 0.0f, 5.f}, {100, -50.0, 50.0f}}}},
+      {"V0/hV0RefitEffNum", "V0 Refit Eff. Numerator;Track combination;Efficiency", {HistType::kTH1F, {{7, 0, 7}}}},
+      {"V0/hV0RefitEffDen", "V0 Refit Eff. Denumerator;Track combination;Efficiency", {HistType::kTH1F, {{7, 0, 7}}}},
       {"V0Leg/hPt", "pT of leg at SV;p_{T,e} (GeV/c)", {HistType::kTH1F, {{1000, 0.0f, 10.0f}}}},
       {"V0Leg/hEtaPhi", "#eta vs. #varphi of leg at SV;#varphi (rad.);#eta", {HistType::kTH2F, {{72, 0.0f, 2 * M_PI}, {400, -2, +2}}}},
       {"V0Leg/hDCAxyz", "DCA xy vs. z to PV;DCA_{xy} (cm);DCA_{z} (cm)", {HistType::kTH2F, {{200, -50.f, 50.f}, {200, -50.f, +50.f}}}},
@@ -177,10 +185,30 @@ struct PhotonConversionBuilder {
       lut = o2::base::MatLayerCylSet::rectifyPtrFromFile(ccdb->get<o2::base::MatLayerCylSet>(lutPath));
     }
 
-    if (useMatCorrType == 1)
+    if (useMatCorrType == 1) {
       matCorr = o2::base::Propagator::MatCorrType::USEMatCorrTGeo;
-    if (useMatCorrType == 2)
+    }
+    if (useMatCorrType == 2) {
       matCorr = o2::base::Propagator::MatCorrType::USEMatCorrLUT;
+    }
+
+    registry.get<TH1>(HIST("V0/hV0RefitEffNum"))->GetXaxis()->SetBinLabel(1, "ITSTPC-ITSTPC");
+    registry.get<TH1>(HIST("V0/hV0RefitEffNum"))->GetXaxis()->SetBinLabel(2, "TPC-TPC");
+    registry.get<TH1>(HIST("V0/hV0RefitEffNum"))->GetXaxis()->SetBinLabel(3, "ITS-ITS");
+    registry.get<TH1>(HIST("V0/hV0RefitEffNum"))->GetXaxis()->SetBinLabel(4, "ITSTPC-TPC");
+    registry.get<TH1>(HIST("V0/hV0RefitEffNum"))->GetXaxis()->SetBinLabel(5, "ITSTPC-ITS");
+    registry.get<TH1>(HIST("V0/hV0RefitEffNum"))->GetXaxis()->SetBinLabel(6, "TPC-ITS");
+    registry.get<TH1>(HIST("V0/hV0RefitEffNum"))->GetXaxis()->SetBinLabel(7, "GLO");
+    registry.get<TH1>(HIST("V0/hV0RefitEffNum"))->Sumw2();
+
+    registry.get<TH1>(HIST("V0/hV0RefitEffDen"))->GetXaxis()->SetBinLabel(1, "ITSTPC-ITSTPC");
+    registry.get<TH1>(HIST("V0/hV0RefitEffDen"))->GetXaxis()->SetBinLabel(2, "TPC-TPC");
+    registry.get<TH1>(HIST("V0/hV0RefitEffDen"))->GetXaxis()->SetBinLabel(3, "ITS-ITS");
+    registry.get<TH1>(HIST("V0/hV0RefitEffDen"))->GetXaxis()->SetBinLabel(4, "ITSTPC-TPC");
+    registry.get<TH1>(HIST("V0/hV0RefitEffDen"))->GetXaxis()->SetBinLabel(5, "ITSTPC-ITS");
+    registry.get<TH1>(HIST("V0/hV0RefitEffDen"))->GetXaxis()->SetBinLabel(6, "TPC-ITS");
+    registry.get<TH1>(HIST("V0/hV0RefitEffDen"))->GetXaxis()->SetBinLabel(7, "GLO");
+    registry.get<TH1>(HIST("V0/hV0RefitEffDen"))->Sumw2();
   }
 
   void initCCDB(aod::BCsWithTimestamps::iterator const& bc)
@@ -202,18 +230,19 @@ struct PhotonConversionBuilder {
     }
 
     auto run3grp_timestamp = bc.timestamp();
-    o2::parameters::GRPObject* grpo = 0x0;
-    o2::parameters::GRPMagField* grpmag = 0x0;
-    if (!skipGRPOquery)
+    o2::parameters::GRPObject* grpo = nullptr;
+    o2::parameters::GRPMagField* grpmag = nullptr;
+    if (!skipGRPOquery) {
       grpo = ccdb->getForTimeStamp<o2::parameters::GRPObject>(grpPath, run3grp_timestamp);
-    if (grpo) {
+    }
+    if (grpo != nullptr) {
       o2::base::Propagator::initFieldFromGRP(grpo);
       // Fetch magnetic field from ccdb for current collision
       d_bz = grpo->getNominalL3Field();
       LOG(info) << "Retrieved GRP for timestamp " << run3grp_timestamp << " with magnetic field of " << d_bz << " kZG";
     } else {
       grpmag = ccdb->getForTimeStamp<o2::parameters::GRPMagField>(grpmagPath, run3grp_timestamp);
-      if (!grpmag) {
+      if (grpmag == nullptr) {
         LOG(fatal) << "Got nullptr from CCDB for path " << grpmagPath << " of object GRPMagField and " << grpPath << " of object GRPObject for timestamp " << run3grp_timestamp;
       }
       o2::base::Propagator::initFieldFromGRP(grpmag);
@@ -228,8 +257,17 @@ struct PhotonConversionBuilder {
       o2::base::Propagator::Instance()->setMatLUT(lut);
     }
     /// Set magnetic field for KF vertexing
-    float magneticField = o2::base::Propagator::Instance()->getNominalBz();
+    const float magneticField = o2::base::Propagator::Instance()->getNominalBz();
     KFParticle::SetField(magneticField);
+
+    mVDriftMgr.init(&ccdb->instance());
+  }
+
+  void updateCCDB(aod::BCsWithTimestamps::iterator const& bc)
+  {
+    auto timestamp = bc.timestamp();
+
+    mVDriftMgr.update(timestamp);
   }
 
   std::pair<int8_t, std::set<uint8_t>> its_ib_Requirement = {0, {0, 1, 2}}; // no hit on 3 ITS ib layers.
@@ -349,9 +387,9 @@ struct PhotonConversionBuilder {
   void fillV0Table(TV0 const& v0, const bool filltable)
   {
     // Get tracks
-    auto pos = v0.template posTrack_as<TTrack>();
-    auto ele = v0.template negTrack_as<TTrack>();
-    auto collision = v0.template collision_as<TCollision>(); // collision where this v0 belongs to.
+    const auto& pos = v0.template posTrack_as<TTrack>();
+    const auto& ele = v0.template negTrack_as<TTrack>();
+    const auto& collision = v0.template collision_as<TCollision>(); // collision where this v0 belongs to.
 
     if (pos.sign() * ele.sign() > 0) { // reject same sign pair
       return;
@@ -371,18 +409,31 @@ struct PhotonConversionBuilder {
     if (!checkV0leg<isMC>(pos) || !checkV0leg<isMC>(ele)) {
       return;
     }
+
+    auto refitBin = getV0LegBin(pos, ele);
+    registry.fill(HIST("V0/hV0RefitEffDen"), refitBin);
     // LOGF(info, "v0.collisionId() = %d , v0.posTrackId() = %d , v0.negTrackId() = %d", v0.collisionId(), v0.posTrackId(), v0.negTrackId());
 
     // Calculate DCA with respect to the collision associated to the v0, not individual tracks
     gpu::gpustd::array<float, 2> dcaInfo;
 
-    auto pTrack = getTrackPar(pos);
-    o2::base::Propagator::Instance()->propagateToDCABxByBz({collision.posX(), collision.posY(), collision.posZ()}, pTrack, 2.f, matCorr, &dcaInfo);
+    auto pTrack = getTrackParCov(pos);
+    if (moveTPCTracks && isTPConlyTrack(pos) && !mVDriftMgr.moveTPCTrack( collision, pos, pTrack)) {
+      LOGP(info, "failed correction for positive tpc track");
+      return;
+    }
+    auto pTrackC = pTrack;
+    o2::base::Propagator::Instance()->propagateToDCABxByBz({collision.posX(), collision.posY(), collision.posZ()}, pTrackC, 2.f, matCorr, &dcaInfo);
     auto posdcaXY = dcaInfo[0];
     auto posdcaZ = dcaInfo[1];
 
-    auto nTrack = getTrackPar(ele);
-    o2::base::Propagator::Instance()->propagateToDCABxByBz({collision.posX(), collision.posY(), collision.posZ()}, nTrack, 2.f, matCorr, &dcaInfo);
+    auto nTrack = getTrackParCov(ele);
+    if (moveTPCTracks && isTPConlyTrack(ele) && !mVDriftMgr.moveTPCTrack(collision, ele, nTrack)) {
+      LOGP(info, "failed correction for negative tpc track");
+      return;
+    }
+    auto nTrackC = nTrack;
+    o2::base::Propagator::Instance()->propagateToDCABxByBz({collision.posX(), collision.posY(), collision.posZ()}, nTrackC, 2.f, matCorr, &dcaInfo);
     auto eledcaXY = dcaInfo[0];
     auto eledcaZ = dcaInfo[1];
 
@@ -391,7 +442,7 @@ struct PhotonConversionBuilder {
     }
 
     float xyz[3] = {0.f, 0.f, 0.f};
-    Vtx_recalculation(o2::base::Propagator::Instance(), pos, ele, xyz, matCorr);
+    Vtx_recalculationParCov(o2::base::Propagator::Instance(), pTrack, nTrack, xyz, matCorr);
     float rxy_tmp = RecoDecay::sqrtSumOfSquares(xyz[0], xyz[1]);
     if (rxy_tmp > maxX + margin_r_tpc) {
       return;
@@ -400,8 +451,8 @@ struct PhotonConversionBuilder {
       return; // RZ line cut
     }
 
-    KFPTrack kfp_track_pos = createKFPTrackFromTrack(pos);
-    KFPTrack kfp_track_ele = createKFPTrackFromTrack(ele);
+    KFPTrack kfp_track_pos = createKFPTrackFromTrackParCov(pTrack, pos.sign(), pos.tpcNClsFound(), pos.tpcChi2NCl());
+    KFPTrack kfp_track_ele = createKFPTrackFromTrackParCov(nTrack, ele.sign(), ele.tpcNClsFound(), ele.tpcChi2NCl());
     KFParticle kfp_pos(kfp_track_pos, -11);
     KFParticle kfp_ele(kfp_track_ele, 11);
     const KFParticle* GammaDaughters[2] = {&kfp_pos, &kfp_ele};
@@ -618,6 +669,8 @@ struct PhotonConversionBuilder {
       fillTrackTable(pos, kfp_pos_DecayVtx, posdcaXY, posdcaZ); // positive leg first
       fillTrackTable(ele, kfp_ele_DecayVtx, eledcaXY, eledcaZ); // negative leg second
     }                                                           // end of fill table
+
+    registry.fill(HIST("V0/hV0RefitEffNum"), refitBin);
   }
 
   Preslice<aod::V0s> perCollision = o2::aod::v0::collisionId;
@@ -637,6 +690,7 @@ struct PhotonConversionBuilder {
 
       auto bc = collision.template bc_as<aod::BCsWithTimestamps>();
       initCCDB(bc);
+      updateCCDB(bc);
       registry.fill(HIST("hCollisionCounter"), 1);
 
       auto v0s_per_coll = v0s.sliceBy(perCollision, collision.globalIndex());
