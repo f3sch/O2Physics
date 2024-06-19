@@ -50,6 +50,8 @@ class TPCVDriftManager
       return;
     }
 
+    // TODO Laser calib
+
     // Update factors
     mTPCVDrift = mVD->refVDrift * mVD->corrFact;
     mTPCVDriftCorrFact = mVD->corrFact;
@@ -68,7 +70,7 @@ class TPCVDriftManager
 
     // Check if there is a good object available otherwise pretend everything is fine
     if (mVD == nullptr) {
-      LOGP(debug, "No VDrift object available, pretending track to be correct");
+      LOGP(warn, "No VDrift object available, pretending track to be correct");
       return true;
     }
 
@@ -76,12 +78,12 @@ class TPCVDriftManager
     float tTB, tTBErr;
     if (col.collisionTimeRes() < 0.f) { // use track data
       tTB = trackExtra.trackTime();
-    o2::aod::track::extensions::TPCTimeErrEncoding enc;
+      o2::aod::track::extensions::TPCTimeErrEncoding enc;
       enc.encoding.timeErr = trackExtra.trackTimeRes();
       tTBErr = 0.5f * (enc.getDeltaTFwd() + enc.getDeltaTBwd());
     } else {
       tTB = col.collisionTime();
-      tTBErr = col.collisionTimeRes() ;
+      tTBErr = col.collisionTimeRes();
     }
 
     float dDrift = (tTB - trackExtra.trackTime()) * mTPCVDriftNS;

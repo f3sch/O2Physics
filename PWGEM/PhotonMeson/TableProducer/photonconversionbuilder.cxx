@@ -284,6 +284,11 @@ struct PhotonConversionBuilder {
       return false;
     }
 
+    // TODO REMOVE
+    if(!isTPConlyTrack(track)){
+      return false;
+    }
+
     if (!track.hasITS() && !track.hasTPC()) {
       return false;
     }
@@ -402,6 +407,7 @@ struct PhotonConversionBuilder {
     if (isITSonlyTrack(pos) && !ele.hasITS()) {
       return;
     }
+
     if (isITSonlyTrack(ele) && !pos.hasITS()) {
       return;
     }
