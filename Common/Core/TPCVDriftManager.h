@@ -145,7 +145,7 @@ class TPCVDriftManager
 
   // CCDB
   const o2::tpc::VDriftCorrFact* mVD{}; // reference to drift correction
-  o2::ccdb::BasicCCDBManager* mCCDB{};           // reference to initialized ccdb manager
+  o2::ccdb::BasicCCDBManager* mCCDB{};  // reference to initialized ccdb manager
 
   static constexpr unsigned int mWarningLimit{10};
 
