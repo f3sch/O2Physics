@@ -33,12 +33,13 @@
 #include <TGenPhaseSpace.h>
 #include <TLorentzVector.h>
 #include <TRandom3.h>
+#include <TPDGCode.h>
 
 #include "Framework/AnalysisDataModel.h"
 #include "Framework/AnalysisTask.h"
 #include "Framework/runDataProcessing.h"
 #include "Framework/HistogramRegistry.h"
-#include <TPDGCode.h>
+#include "CommonConstants/MathConstants.h"
 #include "DCAFitter/DCAFitterN.h"
 #include "Common/Core/RecoDecay.h"
 #include "Framework/O2DatabasePDGPlugin.h"
@@ -50,13 +51,6 @@
 #include "DetectorsVertexing/PVertexerHelpers.h"
 #include "SimulationDataFormat/InteractionSampler.h"
 #include "Field/MagneticField.h"
-
-#include "ITSMFTSimulation/Hit.h"
-#include "ITStracking/Configuration.h"
-#include "ITStracking/IOUtils.h"
-#include "ITStracking/Tracker.h"
-#include "ITStracking/Vertexer.h"
-#include "ITStracking/VertexerTraits.h"
 
 #include "ALICE3/Core/DelphesO2TrackSmearer.h"
 #include "ALICE3/Core/FastTracker.h"
@@ -808,7 +802,7 @@ struct OnTheFlyTracker {
                     std::array<float, 3> posClusterCandidate;
                     trackParCov.getXYZGlo(posClusterCandidate);
                     float r{std::hypot(posClusterCandidate[0], posClusterCandidate[1])};
-                    float phi{std::atan2(-posClusterCandidate[1], -posClusterCandidate[0]) + o2::its::constants::math::Pi};
+                    float phi{std::atan2(-posClusterCandidate[1], -posClusterCandidate[0]) + o2::constants::math::PI};
                     o2::fastsim::DetLayer currentTrackingLayer = fastTracker.GetLayer(i);
 
                     if (currentTrackingLayer.getResolutionRPhi() > 1e-8 && currentTrackingLayer.getResolutionZ() > 1e-8) { // catch zero (though should not really happen...)
@@ -926,7 +920,7 @@ struct OnTheFlyTracker {
       idxVec.reserve(tracksAlice3.size());
       for (unsigned i = 0; i < tracksAlice3.size(); i++) {
         lblTracks.emplace_back(tracksAlice3[i].mcLabel, mcCollision.globalIndex(), 1, false);
-        idxVec.emplace_back(i, o2::dataformats::GlobalTrackID::ITS); // let's say ITS
+        idxVec.emplace_back(i, o2::dataformats::GlobalTrackID/IO); // let's say ITS
       }
 
       // Calculate vertices
