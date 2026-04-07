@@ -35,7 +35,7 @@
 #include <Framework/HistogramRegistry.h>
 #include <Framework/HistogramSpec.h>
 #include <Framework/Logger.h>
-#include <ITSMFTBase/DPLAlpideParam.h>
+#include <DataFormatsITSMFT/DPLAlpideParam.h>
 #include <ITSMFTReconstruction/ChipMappingITS.h>
 
 #include <TH1.h>

@@ -32,7 +32,7 @@
 #include <Framework/InitContext.h>
 #include <Framework/OutputObjHeader.h>
 #include <Framework/runDataProcessing.h>
-#include <ITSMFTBase/DPLAlpideParam.h>
+#include <DataFormatsITSMFT/DPLAlpideParam.h>
 #include <ReconstructionDataFormats/Vertex.h>
 
 #include <TH1.h>
