@@ -147,7 +147,7 @@ o2physics_add_dpl_workflow(material-budget-mc
                     COMPONENT_NAME Analysis)
 
 o2physics_add_dpl_workflow(check-mc-v0
-                    SOURCES CheckMCV0.cxx
+                    SOURCES checkMcV0.cxx
                     PUBLIC_LINK_LIBRARIES O2::Framework O2::DCAFitter O2Physics::AnalysisCore
                     COMPONENT_NAME Analysis)
 
