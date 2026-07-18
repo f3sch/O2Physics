@@ -236,6 +236,9 @@ struct PCMQC {
     fRegistry.add("V0/hEtaPhi", "#eta vs. #varphi;#varphi (rad.);#eta", kTH2F, {{90, 0, o2::constants::math::TwoPI}, {200, -1.0f, 1.0f}}, false);
     fRegistry.add("V0/hXY", "conversion point in XY;V_{x} (cm);V_{y} (cm)", kTH2F, {{400, -100.0f, 100.0f}, {400, -100.0f, 100.0f}}, false);
     fRegistry.add("V0/hRZ", "conversion point in RZ;Z (cm);R_{xy} (cm)", kTH2F, {{200, -100, 100}, {200, 0.0f, 100.0f}}, false);
+    fRegistry.add("V0/hXY_w_o_TPC", "conversion point in XY with only TPC legs;V_{x} (cm);V_{y} (cm)", kTH2F, {{400, -100.0f, 100.0f}, {400, -100.0f, 100.0f}}, false);
+    fRegistry.add("V0/hRZ_w_o_TPC", "conversion point in RZ with only TPC legs;Z (cm);R_{xy} (cm)", kTH2F, {{200, -100, 100}, {200, 0.0f, 100.0f}}, false);
+    fRegistry.add("V0/hRPt", "conversion radius against Pt;#it{p}_{T,#gamma} (GeV/#it{c});R_{xy} (cm)", kTH2F, {{2000, 0.0f, 20}, {200, 0.0f, 100.0f}}, false);
     fRegistry.add("V0/hCosPA", "V0CosPA;cosine pointing angle in 3D", kTH1F, {{100, 0.99f, 1.0f}}, false);
     fRegistry.add("V0/hCosPAXY", "V0CosPA;cosine pointing angle in XY", kTH1F, {{100, 0.99f, 1.0f}}, false);
     fRegistry.add("V0/hCosPARZ", "V0CosPA;cosine pointing angle in RZ", kTH1F, {{100, 0.99f, 1.0f}}, false);
@@ -408,13 +411,18 @@ struct PCMQC {
     fRegistry.fill(HIST("Event/") + HIST(event_types[ev_id]) + HIST("hMultFT0MvsMultNTracksPV"), collision.multFT0A() + collision.multFT0C(), collision.multNTracksPV());
   }
 
-  template <typename TV0>
-  void fillV0Info(TV0 const& v0)
+  template <typename TV0, typename TLeg>
+  void fillV0Info(TV0 const& v0, TLeg const& pos, TLeg const& ele)
   {
     fRegistry.fill(HIST("V0/hPt"), v0.pt());
     fRegistry.fill(HIST("V0/hEtaPhi"), v0.phi(), v0.eta());
     fRegistry.fill(HIST("V0/hXY"), v0.vx(), v0.vy());
     fRegistry.fill(HIST("V0/hRZ"), v0.vz(), v0.v0radius());
+    if (!pos.hasITS() && !ele.hasITS()) {
+      fRegistry.fill(HIST("V0/hXY_w_o_TPC"), v0.vx(), v0.vy());
+      fRegistry.fill(HIST("V0/hRZ_w_o_TPC"), v0.vz(), v0.v0radius());
+    }
+    fRegistry.fill(HIST("V0/hRPt"), v0.pt(), v0.v0radius());
     fRegistry.fill(HIST("V0/hCosPA"), v0.cospa());
     fRegistry.fill(HIST("V0/hCosPAXY"), v0.cospaXY());
     fRegistry.fill(HIST("V0/hCosPARZ"), v0.cospaRZ());
@@ -518,7 +526,7 @@ struct PCMQC {
         if (!fV0PhotonCut.IsSelected<decltype(v0), aod::V0Legs>(v0)) {
           continue;
         }
-        fillV0Info(v0);
+        fillV0Info(v0, pos, ele);
         for (const auto& leg : {pos, ele}) {
           fillV0LegInfo(leg);
         }
