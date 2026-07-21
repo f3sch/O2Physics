@@ -33,6 +33,8 @@
 #include <TMCProcess.h>
 #include <TPDGCode.h>
 
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -77,6 +79,8 @@ struct CheckMcV0 {
   AxisSpec axisPositronPt{cfgAxisGammaPt, "#it{p}_{T}^{e^{+},true} (GeV/#it{c})"};
   AxisSpec axisPairPt{cfgAxisGammaPt, "|#vec{p}_{T}^{e^{-}} + #vec{p}_{T}^{e^{+}}| (GeV/#it{c})"};
   AxisSpec axisLegPtSum{cfgAxisGammaPt, "#it{p}_{T}^{e^{-}} + #it{p}_{T}^{e^{+}} (GeV/#it{c})"};
+  ConfigurableAxis cfgAxisMinLegPt{"cfgAxisMinLegPt", {VARIABLE_WIDTH, 0.001f, 0.005f, 0.01f, 0.02f, 0.03f, 0.04f, 0.05f, 0.06f, 0.07f, 0.08f, 0.09f, 0.1f, 0.15f, 0.2f, 0.25f, 0.3f, 0.35f, 0.4f, 0.45f, 0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1.f, 1.1f, 1.2f, 1.3f, 1.4f, 1.5f, 1.6f, 1.7f, 1.8f, 1.9f, 2.f, 2.2f, 2.5f, 3.f, 4.f, 5.f, 6.f, 8.f, 10.f, 15.f, 20.f}, "minimum truth daughter pT axis"};
+  AxisSpec axisMinLegPt{cfgAxisMinLegPt, "min(#it{p}_{T}^{e^{-}}, #it{p}_{T}^{e^{+}}) (GeV/#it{c})"};
   ConfigurableAxis cfgAxisMomentumFraction{"cfgAxisMomentumFraction", {100, 0.f, 1.f}, "positron momentum fraction axis"};
   AxisSpec axisMomentumFraction{cfgAxisMomentumFraction, "#it{p}_{T}^{e^{+}}/(#it{p}_{T}^{e^{-}} + #it{p}_{T}^{e^{+}})"};
   ConfigurableAxis cfgAxisConversionRadius{"cfgAxisConversionRadius", {400, 0.f, 100.f}, "truth conversion radius axis"};
@@ -141,6 +145,8 @@ struct CheckMcV0 {
       const std::vector<AxisSpec> legEfficiencyAxes{axisConversionRadius, axisLegPt, axisOccupancyTracks, axisCentrality, axisNCol};
       const std::vector<AxisSpec> partnerEfficiencyAxes{axisConversionRadius, axisElectronPt, axisPositronPt, axisOccupancyTracks, axisCentrality, axisNCol};
       const std::vector<AxisSpec> conversionEfficiencyAxes{axisConversionRadius, axisGammaPt, axisOccupancyTracks, axisCentrality, axisNCol};
+      const std::vector<AxisSpec> conversionDaughterKinematicsAxes{axisConversionRadius, axisGammaPt, axisMinLegPt, axisMomentumFraction, axisOccupancyTracks};
+      const std::vector<AxisSpec> eligiblePairTypeAxes{axisConversionRadius, axisGammaPt, axisOccupancyTracks, axisTrackType};
       const std::vector<AxisSpec> rawV0MultiplicityAxes{axisConversionRadius, axisGammaPt, axisOccupancyTracks, axisMultiplicity};
       const std::vector<AxisSpec> rawV0TypeAxes{axisConversionRadius, axisGammaPt, axisOccupancyTracks, axisV0Type};
       const std::vector<AxisSpec> rawV0TrackTypeAxes{axisConversionRadius, axisGammaPt, axisOccupancyTracks, axisTrackType};
@@ -176,6 +182,12 @@ struct CheckMcV0 {
       registry.add("Conversion/hRawV0FoundUsingEligiblePair", "fiducial true conversions with a clean raw V0 using a denominator-eligible track pair", HistType::kTHnSparseF, conversionEfficiencyAxes);
       registry.add("Conversion/hRawV0FoundSameCollisionUsingEligiblePair", "fiducial true conversions with a clean raw V0 in the reference collision using a denominator-eligible track pair", HistType::kTHnSparseF, conversionEfficiencyAxes);
       registry.add("Conversion/hV0Found", "fiducial true conversions reconstructed as a raw V0 in the reference collision", HistType::kTHnSparseF, conversionEfficiencyAxes);
+
+      registry.add("ConversionDaughterKinematics/hBothLegsFound", "fiducial true conversions with both legs reconstructed", HistType::kTHnSparseF, conversionDaughterKinematicsAxes);
+      registry.add("ConversionDaughterKinematics/hRawV0FoundAnywhere", "fiducial true conversions with a clean truth-matched raw V0 in any collision", HistType::kTHnSparseF, conversionDaughterKinematicsAxes);
+
+      registry.add("EligiblePairType/hBothLegsFound", "denominator-eligible reconstructed track-pair types", HistType::kTHnSparseF, eligiblePairTypeAxes);
+      registry.add("EligiblePairType/hRawV0FoundUsingEligiblePair", "denominator-eligible track-pair types used by a clean raw V0", HistType::kTHnSparseF, eligiblePairTypeAxes);
 
       registry.add("RawV0/hCandidateMultiplicity", "number of clean raw V0 rows per reconstructable truth conversion", HistType::kTHnSparseF, rawV0MultiplicityAxes);
       registry.add("RawV0/hDistinctCollisionMultiplicity", "number of distinct raw V0 collision assignments per reconstructable truth conversion", HistType::kTHnSparseF, rawV0MultiplicityAxes);
@@ -369,7 +381,7 @@ struct CheckMcV0 {
   PROCESS_SWITCH(CheckMcV0, processTrueConversion, "process true photon conversions", true);
 
   Preslice<FullMcParticles> perMcCollision = aod::mcparticle::mcCollisionId;
-  void processMCV0(CollisionsMC const& collisions, aod::BCs const& /*bcs*/, aod::V0s const& rawV0s, FullMcParticles const& mcParticles, aod::McCollisions const& /*mcCollisions*/, TracksMC const& /*tracks*/)
+  void processMCV0(CollisionsMC const& collisions, aod::BCs const& /*bcs*/, aod::V0s const& rawV0s, FullMcParticles const& mcParticles, aod::McCollisions const& /*mcCollisions*/, TracksMC const& tracks)
   {
     // Index raw production V0 rows by their truth photon. Efficiency numerators
     // below are filled once per truth-photon/reference-collision entry, while
@@ -474,6 +486,7 @@ struct CheckMcV0 {
         const auto& positron = mcParticles.iteratorAt(positronId);
         const auto& electron = mcParticles.iteratorAt(electronId);
         const float legPtSum = electron.pt() + positron.pt();
+        const float minLegPt = std::min(electron.pt(), positron.pt());
         const float pairPt = std::hypot(electron.px() + positron.px(), electron.py() + positron.py());
         const float positronFraction = legPtSum > 0.f ? positron.pt() / legPtSum : 0.f;
         registry.fill(HIST("Kinematics/hGammaPtPairPt"), mcPhoton.pt(), pairPt);
@@ -513,6 +526,22 @@ struct CheckMcV0 {
         }
 
         registry.fill(HIST("Conversion/hBothLegsFound"), conversionRadius, mcPhoton.pt(), occupancy, centrality, nCol);
+        registry.fill(HIST("ConversionDaughterKinematics/hBothLegsFound"), conversionRadius, mcPhoton.pt(), minLegPt, positronFraction, occupancy);
+
+        std::array<bool, kOther + 1> hasEligiblePairType{};
+        for (const auto positronTrackId : positronTracks.eligibleTrackIds) {
+          const auto& positronTrack = tracks.iteratorAt(positronTrackId);
+          for (const auto electronTrackId : electronTracks.eligibleTrackIds) {
+            const auto& electronTrack = tracks.iteratorAt(electronTrackId);
+            hasEligiblePairType[getRawV0TrackType(positronTrack, electronTrack)] = true;
+          }
+        }
+        for (int trackType = 0; trackType <= kOther; ++trackType) {
+          if (hasEligiblePairType[trackType]) {
+            registry.fill(HIST("EligiblePairType/hBothLegsFound"), conversionRadius, mcPhoton.pt(), occupancy, trackType);
+          }
+        }
+
         const auto rawV0MatchesIt = rawV0MatchesByPhoton.find(mcPhoton.globalIndex());
         const bool hasLabelMatchAnywhere = rawV0MatchesIt != rawV0MatchesByPhoton.end() && !rawV0MatchesIt->second.empty();
         if (hasLabelMatchAnywhere) {
@@ -525,6 +554,7 @@ struct CheckMcV0 {
         bool hasCleanMatchUsingEligiblePair{false};
         bool hasCleanMatchSameCollisionUsingEligiblePair{false};
         int nCleanMatches{0};
+        std::array<bool, kOther + 1> hasRawV0UsingEligiblePairType{};
         std::unordered_set<int64_t> distinctCollisionIds;
         std::set<std::pair<int64_t, int64_t>> distinctTrackPairs;
         const std::unordered_set<int64_t> eligiblePositronTrackIds{positronTracks.eligibleTrackIds.begin(), positronTracks.eligibleTrackIds.end()};
@@ -555,6 +585,7 @@ struct CheckMcV0 {
             const bool usesEligiblePair = eligiblePositronTrackIds.contains(rawV0Match.posTrackId) && eligibleElectronTrackIds.contains(rawV0Match.negTrackId);
             if (usesEligiblePair) {
               hasCleanMatchUsingEligiblePair = true;
+              hasRawV0UsingEligiblePairType[rawV0Match.trackType] = true;
             }
             if (rawV0Match.mcCollisionId == collision.mcCollisionId()) {
               hasCleanMatchSameMcCollision = true;
@@ -574,6 +605,7 @@ struct CheckMcV0 {
 
         if (hasCleanMatchAnywhere) {
           registry.fill(HIST("Conversion/hRawV0FoundAnywhere"), conversionRadius, mcPhoton.pt(), occupancy, centrality, nCol);
+          registry.fill(HIST("ConversionDaughterKinematics/hRawV0FoundAnywhere"), conversionRadius, mcPhoton.pt(), minLegPt, positronFraction, occupancy);
         }
         if (hasCleanMatchSameMcCollision) {
           registry.fill(HIST("Conversion/hRawV0FoundSameMcCollision"), conversionRadius, mcPhoton.pt(), occupancy, centrality, nCol);
@@ -587,6 +619,11 @@ struct CheckMcV0 {
         if (hasCleanMatchSameCollision) {
           registry.fill(HIST("Conversion/hRawV0FoundSameCollision"), conversionRadius, mcPhoton.pt(), occupancy, centrality, nCol);
           registry.fill(HIST("Conversion/hV0Found"), conversionRadius, mcPhoton.pt(), occupancy, centrality, nCol);
+        }
+        for (int trackType = 0; trackType <= kOther; ++trackType) {
+          if (hasRawV0UsingEligiblePairType[trackType]) {
+            registry.fill(HIST("EligiblePairType/hRawV0FoundUsingEligiblePair"), conversionRadius, mcPhoton.pt(), occupancy, trackType);
+          }
         }
       }
     }
