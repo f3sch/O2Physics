@@ -79,6 +79,8 @@ struct CheckMcV0 {
   AxisSpec axisPositronPt{cfgAxisGammaPt, "#it{p}_{T}^{e^{+},true} (GeV/#it{c})"};
   AxisSpec axisPairPt{cfgAxisGammaPt, "|#vec{p}_{T}^{e^{-}} + #vec{p}_{T}^{e^{+}}| (GeV/#it{c})"};
   AxisSpec axisLegPtSum{cfgAxisGammaPt, "#it{p}_{T}^{e^{-}} + #it{p}_{T}^{e^{+}} (GeV/#it{c})"};
+  ConfigurableAxis cfgAxisRawV0PairPt{"cfgAxisRawV0PairPt", {VARIABLE_WIDTH, 0.001f, 0.005f, 0.01f, 0.02f, 0.03f, 0.04f, 0.05f, 0.06f, 0.07f, 0.08f, 0.09f, 0.1f, 0.15f, 0.2f, 0.25f, 0.3f, 0.35f, 0.4f, 0.45f, 0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1.f, 1.1f, 1.2f, 1.3f, 1.4f, 1.5f, 1.6f, 1.7f, 1.8f, 1.9f, 2.f, 2.2f, 2.5f, 3.f, 4.f, 5.f, 6.f, 8.f, 10.f, 15.f, 20.f}, "raw V0 daughter-pair pT axis"};
+  AxisSpec axisRawV0PairPt{cfgAxisRawV0PairPt, "raw V0 daughter-pair #it{p}_{T} (GeV/#it{c})"};
   ConfigurableAxis cfgAxisMinLegPt{"cfgAxisMinLegPt", {VARIABLE_WIDTH, 0.001f, 0.005f, 0.01f, 0.02f, 0.03f, 0.04f, 0.05f, 0.06f, 0.07f, 0.08f, 0.09f, 0.1f, 0.15f, 0.2f, 0.25f, 0.3f, 0.35f, 0.4f, 0.45f, 0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1.f, 1.1f, 1.2f, 1.3f, 1.4f, 1.5f, 1.6f, 1.7f, 1.8f, 1.9f, 2.f, 2.2f, 2.5f, 3.f, 4.f, 5.f, 6.f, 8.f, 10.f, 15.f, 20.f}, "minimum truth daughter pT axis"};
   AxisSpec axisMinLegPt{cfgAxisMinLegPt, "min(#it{p}_{T}^{e^{-}}, #it{p}_{T}^{e^{+}}) (GeV/#it{c})"};
   ConfigurableAxis cfgAxisMomentumFraction{"cfgAxisMomentumFraction", {100, 0.f, 1.f}, "positron momentum fraction axis"};
@@ -100,8 +102,9 @@ struct CheckMcV0 {
   AxisSpec axisV0Type{16, -0.5f, 15.5f, "raw V0 type"};
   AxisSpec axisTrackType{5, -0.5f, 4.5f, "raw V0 daughter track type"};
   AxisSpec axisCollisionAssociation{4, -0.5f, 3.5f, "raw V0 collision association"};
+  AxisSpec axisRawV0TruthClass{6, -0.5f, 5.5f, "raw V0 truth class"};
 
-  enum RawV0TrackType : int {
+  enum RawV0TrackType : uint8_t {
     kITSTPCITSTPC = 0,
     kITSTPCTPCOnly,
     kTPCOnlyTPCOnly,
@@ -109,11 +112,20 @@ struct CheckMcV0 {
     kOther
   };
 
-  enum RawV0CollisionAssociation : int {
+  enum RawV0CollisionAssociation : uint8_t {
     kExactRecoCollision = 0,
     kOtherRecoSameMcCollision,
     kOtherMcCollision,
     kNoMcCollisionLabel
+  };
+
+  enum RawV0TruthClass : uint8_t {
+    kMissingTrackLabel = 0,
+    kNonCleanTrackLabel,
+    kSameTruthParticle,
+    kTruePhotonConversion,
+    kCommonMotherBackground,
+    kCombinatorialBackground
   };
 
   struct RawV0Match {
@@ -153,6 +165,8 @@ struct CheckMcV0 {
       const std::vector<AxisSpec> rawV0CollisionAssociationAxes{axisConversionRadius, axisGammaPt, axisOccupancyTracks, axisCollisionAssociation};
       const std::vector<AxisSpec> electronTrackMultiplicityAxes{axisConversionRadius, axisElectronPt, axisOccupancyTracks, axisMultiplicity};
       const std::vector<AxisSpec> positronTrackMultiplicityAxes{axisConversionRadius, axisPositronPt, axisOccupancyTracks, axisMultiplicity};
+      const std::vector<AxisSpec> rawV0PurityAxes{axisRawV0PairPt, axisOccupancyTracks, axisCentrality, axisV0Type, axisTrackType, axisRawV0TruthClass};
+      const std::vector<AxisSpec> rawV0ConditionalFakeAxes{axisRawV0PairPt, axisOccupancyTracks, axisCentrality, axisV0Type, axisTrackType};
 
       registry.add("Event/hCentrality", "collision centrality", HistType::kTH1F, {axisCentrality});
       registry.add("Event/hOccupancy", "track occupancy in the time range around the collision", HistType::kTH1F, {axisOccupancyTracks});
@@ -195,6 +209,12 @@ struct CheckMcV0 {
       registry.add("RawV0/hV0Type", "type of each clean truth-matched raw V0 row", HistType::kTHnSparseF, rawV0TypeAxes);
       registry.add("RawV0/hTrackType", "daughter track type of each clean truth-matched raw V0 row", HistType::kTHnSparseF, rawV0TrackTypeAxes);
       registry.add("RawV0/hCollisionAssociation", "collision association of each clean truth-matched raw V0 row", HistType::kTHnSparseF, rawV0CollisionAssociationAxes);
+
+      registry.add("RawV0Purity/hTruthClass", "truth composition of all raw V0 rows in MC-labelled reconstructed collisions", HistType::kTHnSparseF, rawV0PurityAxes);
+      registry.add("RawV0Purity/hCleanElectronPair", "raw V0 rows with clean, distinct truth positron and electron labels", HistType::kTHnSparseF, rawV0ConditionalFakeAxes);
+      registry.add("RawV0Purity/hCleanElectronWrongPair", "clean truth-electron raw V0 rows that are not an exact photon conversion pair", HistType::kTHnSparseF, rawV0ConditionalFakeAxes);
+      registry.add("RawV0Purity/hTruePhotonConversion", "raw V0 rows truth-matched to an exact photon conversion", HistType::kTHnSparseF, rawV0ConditionalFakeAxes);
+      registry.add("RawV0Purity/hTruePhotonConversionWrongMcCollision", "exact conversion raw V0 rows assigned to a different MC collision", HistType::kTHnSparseF, rawV0ConditionalFakeAxes);
 
       registry.add("TrackClones/hElectronSameCollision", "number of reconstructed electron tracks in the reference collision", HistType::kTHnSparseF, electronTrackMultiplicityAxes);
       registry.add("TrackClones/hElectronEligible", "number of denominator-eligible electron tracks in the reference collision", HistType::kTHnSparseF, electronTrackMultiplicityAxes);
@@ -287,6 +307,31 @@ struct CheckMcV0 {
       return kContainsITSOnly;
     }
     return kOther;
+  }
+
+  template <typename TMCParticle>
+  bool hasCommonMother(TMCParticle const& first, TMCParticle const& second)
+  {
+    if (!first.has_mothers() || !second.has_mothers()) {
+      return false;
+    }
+    for (const auto firstMotherId : first.mothersIds()) {
+      for (const auto secondMotherId : second.mothersIds()) {
+        if (firstMotherId == secondMotherId) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  template <typename TMCParticle>
+  bool isTruePhotonConversionPair(TMCParticle const& posMC, TMCParticle const& eleMC)
+  {
+    return posMC.globalIndex() != eleMC.globalIndex() &&
+           posMC.pdgCode() == kPositron && eleMC.pdgCode() == kElectron &&
+           posMC.getProcess() == TMCProcess::kPPair && eleMC.getProcess() == TMCProcess::kPPair &&
+           checkMCParticles<kGamma>(posMC, eleMC);
   }
 
   std::vector<int> countNeighbors(CollisionsMC const& collisions)
@@ -383,9 +428,71 @@ struct CheckMcV0 {
   Preslice<FullMcParticles> perMcCollision = aod::mcparticle::mcCollisionId;
   void processMCV0(CollisionsMC const& collisions, aod::BCs const& /*bcs*/, aod::V0s const& rawV0s, FullMcParticles const& mcParticles, aod::McCollisions const& /*mcCollisions*/, TracksMC const& tracks)
   {
-    // Index raw production V0 rows by their truth photon. Efficiency numerators
-    // below are filled once per truth-photon/reference-collision entry, while
-    // this vector retains all cloned rows for multiplicity diagnostics.
+    // Candidate-level purity sample.
+    // Count each raw V0 row once and retain label failures instead of applying the reconstructed-leg MC-label cut.
+    for (const auto& rawV0 : rawV0s) {
+      if (rawV0.collisionId() < 0) {
+        continue;
+      }
+      const auto& pos = rawV0.template posTrack_as<TracksMC>();
+      const auto& ele = rawV0.template negTrack_as<TracksMC>();
+      const auto& assignedCollision = rawV0.template collision_as<CollisionsMC>();
+      if (!assignedCollision.has_mcCollision()) {
+        continue;
+      }
+
+      const float centrality = [&] {
+        switch (cfgCentEstimator) {
+          case 2:
+            return assignedCollision.centFT0C();
+          case 1:
+            return assignedCollision.centFT0A();
+          default:
+            return assignedCollision.centFT0M();
+        }
+      }();
+      const auto occupancy = static_cast<float>(assignedCollision.trackOccupancyInTimeRange());
+      const float pairPt = std::hypot(pos.px() + ele.px(), pos.py() + ele.py());
+      const int trackType = getRawV0TrackType(pos, ele);
+
+      if (!pos.has_mcParticle() || !ele.has_mcParticle()) {
+        registry.fill(HIST("RawV0Purity/hTruthClass"), pairPt, occupancy, centrality, rawV0.v0Type(), trackType, kMissingTrackLabel);
+        continue;
+      }
+
+      const auto& posMC = pos.template mcParticle_as<FullMcParticles>();
+      const auto& eleMC = ele.template mcParticle_as<FullMcParticles>();
+      const bool hasCleanTrackLabels = pos.mcMask() == 0 && ele.mcMask() == 0;
+      const bool isSameTruthParticle = posMC.globalIndex() == eleMC.globalIndex();
+      const bool isElectronPair = !isSameTruthParticle && posMC.pdgCode() == kPositron && eleMC.pdgCode() == kElectron;
+      const bool isTrueConversion = isTruePhotonConversionPair(posMC, eleMC);
+
+      if (!hasCleanTrackLabels) {
+        registry.fill(HIST("RawV0Purity/hTruthClass"), pairPt, occupancy, centrality, rawV0.v0Type(), trackType, kNonCleanTrackLabel);
+      } else if (isSameTruthParticle) {
+        registry.fill(HIST("RawV0Purity/hTruthClass"), pairPt, occupancy, centrality, rawV0.v0Type(), trackType, kSameTruthParticle);
+      } else if (isTrueConversion) {
+        registry.fill(HIST("RawV0Purity/hTruthClass"), pairPt, occupancy, centrality, rawV0.v0Type(), trackType, kTruePhotonConversion);
+        registry.fill(HIST("RawV0Purity/hTruePhotonConversion"), pairPt, occupancy, centrality, rawV0.v0Type(), trackType);
+        if (assignedCollision.mcCollisionId() != posMC.mcCollisionId()) {
+          registry.fill(HIST("RawV0Purity/hTruePhotonConversionWrongMcCollision"), pairPt, occupancy, centrality, rawV0.v0Type(), trackType);
+        }
+      } else if (hasCommonMother(posMC, eleMC)) {
+        registry.fill(HIST("RawV0Purity/hTruthClass"), pairPt, occupancy, centrality, rawV0.v0Type(), trackType, kCommonMotherBackground);
+      } else {
+        registry.fill(HIST("RawV0Purity/hTruthClass"), pairPt, occupancy, centrality, rawV0.v0Type(), trackType, kCombinatorialBackground);
+      }
+
+      if (hasCleanTrackLabels && isElectronPair) {
+        registry.fill(HIST("RawV0Purity/hCleanElectronPair"), pairPt, occupancy, centrality, rawV0.v0Type(), trackType);
+        if (!isTrueConversion) {
+          registry.fill(HIST("RawV0Purity/hCleanElectronWrongPair"), pairPt, occupancy, centrality, rawV0.v0Type(), trackType);
+        }
+      }
+    }
+
+    // Index raw production V0 rows by their truth photon.
+    // Efficiency numerators below are filled once per truth-photon/reference-collision entry, while this vector retains all cloned rows for multiplicity diagnostics.
     std::unordered_map<int64_t, std::vector<RawV0Match>> rawV0MatchesByPhoton;
     for (const auto& rawV0 : rawV0s) {
       const auto& pos = rawV0.template posTrack_as<TracksMC>();
@@ -396,10 +503,7 @@ struct CheckMcV0 {
 
       const auto& posMC = pos.template mcParticle_as<FullMcParticles>();
       const auto& eleMC = ele.template mcParticle_as<FullMcParticles>();
-      if (posMC.globalIndex() == eleMC.globalIndex() || posMC.pdgCode() != kPositron || eleMC.pdgCode() != kElectron) {
-        continue;
-      }
-      if (posMC.getProcess() != TMCProcess::kPPair || eleMC.getProcess() != TMCProcess::kPPair || !checkMCParticles<kGamma>(posMC, eleMC)) {
+      if (!isTruePhotonConversionPair(posMC, eleMC)) {
         continue;
       }
 
