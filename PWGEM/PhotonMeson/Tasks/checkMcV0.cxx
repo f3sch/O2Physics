@@ -114,6 +114,17 @@ struct CheckMcV0 {
     kOther
   };
 
+  enum ConversionEfficiencyCounter : uint8_t {
+    kCounterBothLegsEligible = 1,
+    kCounterBothLegsFoundAnywhere,
+    kCounterRawV0FoundAnywhereUsingEligiblePair,
+    kCounterRawV0ITSTPCITSTPC,
+    kCounterRawV0ITSTPCTPCOnly,
+    kCounterRawV0TPCOnlyTPCOnly,
+    kCounterRawV0ContainsITSOnly,
+    kCounterRawV0Other
+  };
+
   enum RawV0CollisionAssociation : uint8_t {
     kExactRecoCollision = 0,
     kOtherRecoSameMcCollision,
@@ -199,6 +210,15 @@ struct CheckMcV0 {
       registry.add("Conversion/hRawV0FoundSameCollision", "fiducial true conversions with a clean raw V0 assigned to the reference reconstructed collision", HistType::kTHnSparseF, conversionEfficiencyAxes);
       registry.add("Conversion/hRawV0FoundUsingEligiblePair", "fiducial true conversions with a clean raw V0 using a reference-collision-eligible track pair", HistType::kTHnSparseF, conversionEfficiencyAxes);
       registry.add("Conversion/hRawV0FoundSameCollisionUsingEligiblePair", "fiducial true conversions with a clean raw V0 in the reference collision using a reference-collision-eligible track pair", HistType::kTHnSparseF, conversionEfficiencyAxes);
+      auto hConversionEfficiencyCounter = registry.add<TH1>("Conversion/hEfficiencyCounter", "integrated conversion efficiency counters;;selected truth conversions", HistType::kTH1D, {{8, 0.5f, 8.5f}});
+      hConversionEfficiencyCounter->GetXaxis()->SetBinLabel(kCounterBothLegsEligible, "A: both legs eligible");
+      hConversionEfficiencyCounter->GetXaxis()->SetBinLabel(kCounterBothLegsFoundAnywhere, "B: both legs found anywhere");
+      hConversionEfficiencyCounter->GetXaxis()->SetBinLabel(kCounterRawV0FoundAnywhereUsingEligiblePair, "C: raw V0 with eligible pair");
+      hConversionEfficiencyCounter->GetXaxis()->SetBinLabel(kCounterRawV0ITSTPCITSTPC, "C: ITS-TPC + ITS-TPC");
+      hConversionEfficiencyCounter->GetXaxis()->SetBinLabel(kCounterRawV0ITSTPCTPCOnly, "C: ITS-TPC + TPC-only");
+      hConversionEfficiencyCounter->GetXaxis()->SetBinLabel(kCounterRawV0TPCOnlyTPCOnly, "C: TPC-only + TPC-only");
+      hConversionEfficiencyCounter->GetXaxis()->SetBinLabel(kCounterRawV0ContainsITSOnly, "C: contains ITS-only");
+      hConversionEfficiencyCounter->GetXaxis()->SetBinLabel(kCounterRawV0Other, "C: other");
 
       registry.add("ConversionDaughterKinematics/hBothLegsFoundAnywhere", "fiducial true conversions with both legs reconstructed in any collision", HistType::kTHnSparseF, conversionDaughterKinematicsAxes);
       registry.add("ConversionDaughterKinematics/hRawV0FoundAnywhere", "fiducial true conversions with a clean raw V0 using a track pair eligible in any collision", HistType::kTHnSparseF, conversionDaughterKinematicsAxes);
@@ -653,9 +673,11 @@ struct CheckMcV0 {
         }
 
         registry.fill(HIST("Conversion/hBothLegsEligible"), conversionRadius, mcPhoton.pt(), occupancy, centrality, nCol);
+        registry.fill(HIST("Conversion/hEfficiencyCounter"), kCounterBothLegsEligible);
         if (bothLegsFoundAnywhere) {
           registry.fill(HIST("Conversion/hBothLegsFoundAnywhere"), conversionRadius, mcPhoton.pt(), occupancy, centrality, nCol);
           registry.fill(HIST("ConversionDaughterKinematics/hBothLegsFoundAnywhere"), conversionRadius, mcPhoton.pt(), minLegPt, positronFraction, occupancy);
+          registry.fill(HIST("Conversion/hEfficiencyCounter"), kCounterBothLegsFoundAnywhere);
         }
 
         // Raw V0 matching is evaluated for every fiducial conversion, independent of whether the legs were found in the reference collision,
@@ -674,6 +696,7 @@ struct CheckMcV0 {
         bool hasCleanMatchUsingAnywhereEligiblePair{false};
         int nCleanMatches{0};
         std::array<bool, kOther + 1> hasRawV0UsingEligiblePairType{};
+        std::array<bool, kOther + 1> hasRawV0UsingAnywhereEligiblePairType{};
         std::unordered_set<int64_t> distinctCollisionIds;
         std::set<std::pair<int64_t, int64_t>> distinctTrackPairs;
         const std::unordered_set<int64_t> eligiblePositronTrackIds{positronTracks.eligibleTrackIds.begin(), positronTracks.eligibleTrackIds.end()};
@@ -710,6 +733,7 @@ struct CheckMcV0 {
             }
             if (anywherePositronTrackIds.contains(rawV0Match.posTrackId) && anywhereElectronTrackIds.contains(rawV0Match.negTrackId)) {
               hasCleanMatchUsingAnywhereEligiblePair = true;
+              hasRawV0UsingAnywhereEligiblePairType[rawV0Match.trackType] = true;
             }
             if (rawV0Match.mcCollisionId == collision.mcCollisionId()) {
               hasCleanMatchSameMcCollision = true;
@@ -736,6 +760,16 @@ struct CheckMcV0 {
         if (hasCleanMatchUsingAnywhereEligiblePair) {
           registry.fill(HIST("Conversion/hRawV0FoundAnywhereUsingEligiblePair"), conversionRadius, mcPhoton.pt(), occupancy, centrality, nCol);
           registry.fill(HIST("ConversionDaughterKinematics/hRawV0FoundAnywhere"), conversionRadius, mcPhoton.pt(), minLegPt, positronFraction, occupancy);
+          registry.fill(HIST("Conversion/hEfficiencyCounter"), kCounterRawV0FoundAnywhereUsingEligiblePair);
+
+          // Assign each reconstructed truth photon to exactly one contributing track type. Prefer the
+          // category requiring the least standalone tracking so the type bins form an additive split of C.
+          for (int trackType = 0; trackType <= kOther; ++trackType) {
+            if (hasRawV0UsingAnywhereEligiblePairType[trackType]) {
+              registry.fill(HIST("Conversion/hEfficiencyCounter"), kCounterRawV0ITSTPCITSTPC + trackType);
+              break;
+            }
+          }
         }
 
         // Reference-collision pipeline quantities: everything below is conditional on both legs being found in the reference collision.
